@@ -1,8 +1,10 @@
 const cursor = require('./cursor');
 const windsurf = require('./windsurf');
 const claude = require('./claude');
+const vscode = require('./vscode');
+const zed = require('./zed');
 
-const editors = [cursor, windsurf, claude];
+const editors = [cursor, windsurf, claude, vscode, zed];
 
 /**
  * Get all chats from all editor adapters, sorted by most recent first.
@@ -30,9 +32,9 @@ function getAllChats() {
  */
 function getMessages(chat) {
   const editor = editors.find((e) => e.name === chat.source);
-  // windsurf/windsurf-next source names need to match the windsurf adapter
+  // Match variants: windsurf-next, antigravity, claude-code, vscode-insiders etc.
   const resolvedEditor = editor || editors.find((e) =>
-    chat.source && chat.source.startsWith(e.name)
+    chat.source && (chat.source.startsWith(e.name) || (e.sources && e.sources.includes(chat.source)))
   );
   if (!resolvedEditor) return [];
   return resolvedEditor.getMessages(chat);

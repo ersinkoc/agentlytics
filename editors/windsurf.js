@@ -6,10 +6,11 @@ const http = require('http');
 
 const HOME = os.homedir();
 
-// Windsurf variants: stable and next
+// Windsurf-family variants: Windsurf, Windsurf Next, Antigravity
 const VARIANTS = [
-  { id: 'windsurf', processName: 'language_server_macos_arm', ideFlag: 'windsurf' },
-  { id: 'windsurf-next', processName: 'language_server_macos_arm', ideFlag: 'windsurf-next' },
+  { id: 'windsurf', matchKey: 'ide', matchVal: 'windsurf', https: false },
+  { id: 'windsurf-next', matchKey: 'ide', matchVal: 'windsurf-next', https: false },
+  { id: 'antigravity', matchKey: 'appDataDir', matchVal: 'antigravity', https: true },
 ];
 
 // ============================================================
@@ -27,9 +28,11 @@ function findLanguageServers() {
       if (!line.includes('language_server_macos') || !line.includes('--csrf_token')) continue;
       const csrfMatch = line.match(/--csrf_token\s+(\S+)/);
       const ideMatch = line.match(/--ide_name\s+(\S+)/);
+      const appDirMatch = line.match(/--app_data_dir\s+(\S+)/);
       if (!csrfMatch) continue;
       const csrf = csrfMatch[1];
       const ide = ideMatch ? ideMatch[1] : 'windsurf';
+      const appDataDir = appDirMatch ? appDirMatch[1] : null;
       // Find port by checking listening sockets for this process
       const pidMatch = line.match(/^\S+\s+(\d+)/);
       if (!pidMatch) continue;
@@ -39,7 +42,7 @@ function findLanguageServers() {
         for (const l of lsof.split('\n')) {
           const portMatch = l.match(/TCP\s+127\.0\.0\.1:(\d+)\s+\(LISTEN\)/);
           if (portMatch) {
-            _lsCache.push({ ide, port: parseInt(portMatch[1]), csrf, pid });
+            _lsCache.push({ ide, appDataDir, port: parseInt(portMatch[1]), csrf, pid });
           }
         }
       } catch { /* skip */ }
@@ -48,11 +51,15 @@ function findLanguageServers() {
   return _lsCache;
 }
 
-function getLsForVariant(variantId) {
+function getLsForVariant(variant) {
   const servers = findLanguageServers();
-  // Match by ide_name flag
-  const matches = servers.filter(s => s.ide === variantId);
-  // Prefer the first port (language server port, not LSP port)
+  let matches;
+  if (variant.matchKey === 'appDataDir') {
+    matches = servers.filter(s => s.appDataDir === variant.matchVal);
+  } else {
+    // Exclude servers that have appDataDir set (they belong to a different variant)
+    matches = servers.filter(s => s.ide === variant.matchVal && !s.appDataDir);
+  }
   return matches.length > 0 ? matches[0] : null;
 }
 
@@ -60,12 +67,14 @@ function getLsForVariant(variantId) {
 // Connect protocol HTTP client for language server RPC
 // ============================================================
 
-function callRpc(port, csrf, method, body) {
+function callRpc(port, csrf, method, body, useHttps) {
   const data = JSON.stringify(body || {});
-  const url = `http://127.0.0.1:${port}/exa.language_server_pb.LanguageServerService/${method}`;
+  const scheme = useHttps ? 'https' : 'http';
+  const url = `${scheme}://127.0.0.1:${port}/exa.language_server_pb.LanguageServerService/${method}`;
+  const insecure = useHttps ? '-k ' : '';
   try {
     const result = execSync(
-      `curl -s -X POST ${JSON.stringify(url)} ` +
+      `curl -s ${insecure}-X POST ${JSON.stringify(url)} ` +
       `-H "Content-Type: application/json" ` +
       `-H "x-codeium-csrf-token: ${csrf}" ` +
       `-d ${JSON.stringify(data)} ` +
@@ -81,15 +90,16 @@ function callRpc(port, csrf, method, body) {
 // ============================================================
 
 const name = 'windsurf';
+const sources = ['windsurf', 'windsurf-next', 'antigravity'];
 
 function getChats() {
   const chats = [];
 
   for (const variant of VARIANTS) {
-    const ls = getLsForVariant(variant.id);
+    const ls = getLsForVariant(variant);
     if (!ls) continue;
 
-    const resp = callRpc(ls.port, ls.csrf, 'GetAllCascadeTrajectories', {});
+    const resp = callRpc(ls.port, ls.csrf, 'GetAllCascadeTrajectories', {}, variant.https);
     if (!resp || !resp.trajectorySummaries) continue;
 
     for (const [cascadeId, summary] of Object.entries(resp.trajectorySummaries)) {
@@ -106,6 +116,7 @@ function getChats() {
         encrypted: false,
         _port: ls.port,
         _csrf: ls.csrf,
+        _https: variant.https,
         _stepCount: summary.stepCount,
         _model: summary.lastGeneratorModelUid,
       });
@@ -120,7 +131,7 @@ function getMessages(chat) {
 
   const resp = callRpc(chat._port, chat._csrf, 'GetCascadeTrajectory', {
     cascadeId: chat.composerId,
-  });
+  }, chat._https);
   if (!resp || !resp.trajectory || !resp.trajectory.steps) return [];
 
   const messages = [];
@@ -170,4 +181,4 @@ function getMessages(chat) {
   return messages;
 }
 
-module.exports = { name, getChats, getMessages };
+module.exports = { name, sources, getChats, getMessages };
