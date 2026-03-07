@@ -10,9 +10,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 // API endpoints — all reads from SQLite cache
 // ============================================================
 
+// Helper: parse date query params into Unix ms timestamps
+function parseDateOpts(query) {
+  const opts = {};
+  if (query.dateFrom) opts.dateFrom = parseInt(query.dateFrom) || null;
+  if (query.dateTo) opts.dateTo = parseInt(query.dateTo) || null;
+  return opts;
+}
+
 app.get('/api/overview', (req, res) => {
   try {
-    const opts = { editor: req.query.editor || null };
+    const opts = { editor: req.query.editor || null, ...parseDateOpts(req.query) };
     res.json(cache.getCachedOverview(opts));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -21,7 +29,7 @@ app.get('/api/overview', (req, res) => {
 
 app.get('/api/daily-activity', (req, res) => {
   try {
-    const opts = { editor: req.query.editor || null };
+    const opts = { editor: req.query.editor || null, ...parseDateOpts(req.query) };
     res.json(cache.getCachedDailyActivity(opts));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -36,6 +44,7 @@ app.get('/api/chats', (req, res) => {
       named: req.query.named !== 'false',
       limit: req.query.limit ? parseInt(req.query.limit) : 200,
       offset: req.query.offset ? parseInt(req.query.offset) : 0,
+      ...parseDateOpts(req.query),
     };
     const total = cache.countCachedChats(opts);
     const rows = cache.getCachedChats(opts);
@@ -70,7 +79,7 @@ app.get('/api/chats/:id', (req, res) => {
 
 app.get('/api/projects', (req, res) => {
   try {
-    res.json(cache.getCachedProjects());
+    res.json(cache.getCachedProjects(parseDateOpts(req.query)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -82,6 +91,7 @@ app.get('/api/deep-analytics', (req, res) => {
       editor: req.query.editor || null,
       folder: req.query.folder || null,
       limit: Math.min(parseInt(req.query.limit) || 500, 5000),
+      ...parseDateOpts(req.query),
     };
     res.json(cache.getCachedDeepAnalytics(opts));
   } catch (err) {
@@ -91,7 +101,7 @@ app.get('/api/deep-analytics', (req, res) => {
 
 app.get('/api/dashboard-stats', (req, res) => {
   try {
-    const opts = { editor: req.query.editor || null };
+    const opts = { editor: req.query.editor || null, ...parseDateOpts(req.query) };
     res.json(cache.getCachedDashboardStats(opts));
   } catch (err) {
     res.status(500).json({ error: err.message });
