@@ -1,14 +1,27 @@
 {
   "name": "agentlytics",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Comprehensive analytics dashboard for AI coding agents — Cursor, Windsurf, Claude Code, VS Code Copilot, Zed, Antigravity, OpenCode",
   "main": "index.js",
   "bin": {
     "agentlytics": "./index.js"
   },
+  "files": [
+    "index.js",
+    "cache.js",
+    "server.js",
+    "editors/",
+    "ui/src/",
+    "ui/index.html",
+    "ui/package.json",
+    "ui/package-lock.json",
+    "ui/vite.config.js",
+    "ui/eslint.config.js",
+    "README.md"
+  ],
   "scripts": {
     "start": "node index.js",
-    "build": "cd ui && npm run build",
+    "build": "cd ui && npm install && npm run build",
     "dev": "cd ui && npm run dev"
   },
   "keywords": [
@@ -24,8 +37,12 @@
     "ai",
     "agent"
   ],
-  "author": "",
+  "author": "fkadev",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/f/agentlytics"
+  },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "chalk": "^4.1.2",

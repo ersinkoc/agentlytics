@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { Activity, BarChart3, GitCompare, MessageSquare, FolderOpen, Sun, Moon, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Activity, BarChart3, GitCompare, MessageSquare, FolderOpen, Sun, Moon, RefreshCw, AlertTriangle, Github, Terminal } from 'lucide-react'
 import { fetchOverview, refetchAgents } from './lib/api'
 import { useTheme } from './lib/theme'
 import Dashboard from './pages/Dashboard'
@@ -102,6 +102,22 @@ export default function App() {
           <Route path="/compare" element={<Compare overview={overview} />} />
         </Routes>
       </main>
+
+      <footer className="border-t mt-8 px-4 py-3 flex items-center justify-between text-[10px]" style={{ borderColor: 'var(--c-border)', color: 'var(--c-text3)' }}>
+        <div className="flex items-center gap-3">
+          <a href="https://github.com/f/agentlytics" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[var(--c-text)] transition">
+            <Github size={11} />
+            <span>GitHub</span>
+          </a>
+          <span className="flex items-center gap-1">
+            <Terminal size={11} />
+            <code style={{ fontFamily: 'JetBrains Mono, monospace' }}>npx agentlytics</code>
+          </span>
+        </div>
+        <span>
+          built by <a href="https://github.com/f" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--c-text)] transition" style={{ color: 'var(--c-text2)' }}>fkadev</a>
+        </span>
+      </footer>
     </div>
   )
 }

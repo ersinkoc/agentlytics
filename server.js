@@ -103,14 +103,14 @@ app.get('/api/tool-calls', (req, res) => {
   }
 });
 
-app.get('/api/refetch', (req, res) => {
+app.get('/api/refetch', async (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
   });
   try {
-    const result = cache.resetAndRescan((progress) => {
+    const result = await cache.resetAndRescanAsync((progress) => {
       res.write(`data: ${JSON.stringify(progress)}\n\n`);
     });
     res.write(`data: ${JSON.stringify({ done: true, total: result.total, analyzed: result.analyzed })}\n\n`);

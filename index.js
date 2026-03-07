@@ -4,15 +4,46 @@ const chalk = require('chalk');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const cache = require('./cache');
+const { execSync } = require('child_process');
 
-const PORT = 4637;
+const HOME = os.homedir();
+const PORT = process.env.PORT || 4637;
 const noCache = process.argv.includes('--no-cache');
 
 console.log('');
 console.log(chalk.bold('  ⚡ Agentlytics'));
 console.log(chalk.dim('  Comprehensive analytics for your AI coding agents'));
 console.log('');
+
+// ── Build UI if not already built ──────────────────────────
+const publicIndex = path.join(__dirname, 'public', 'index.html');
+const uiDir = path.join(__dirname, 'ui');
+
+if (!fs.existsSync(publicIndex) && fs.existsSync(uiDir)) {
+  console.log(chalk.cyan('  ⟳ Building dashboard UI (first run)...'));
+  try {
+    const uiModules = path.join(uiDir, 'node_modules');
+    if (!fs.existsSync(uiModules)) {
+      console.log(chalk.dim('    Installing UI dependencies...'));
+      execSync('npm install --no-audit --no-fund', { cwd: uiDir, stdio: 'pipe' });
+    }
+    console.log(chalk.dim('    Compiling frontend...'));
+    execSync('npm run build', { cwd: uiDir, stdio: 'pipe' });
+    console.log(chalk.green('  ✓ UI built successfully'));
+  } catch (err) {
+    console.error(chalk.red('  ✗ UI build failed:'), err.message);
+    process.exit(1);
+  }
+  console.log('');
+}
+
+if (!fs.existsSync(publicIndex)) {
+  console.error(chalk.red('  ✗ No built UI found at public/index.html'));
+  console.error(chalk.dim('    Run: cd ui && npm install && npm run build'));
+  process.exit(1);
+}
+
+const cache = require('./cache');
 
 // Wipe cache if --no-cache flag is passed
 if (noCache) {
@@ -22,6 +53,41 @@ if (noCache) {
     console.log(chalk.yellow('  ⟳ Cache cleared (--no-cache)'));
   }
 }
+
+// ── Warn about installed-but-not-running Windsurf variants ─
+const WINDSURF_VARIANTS = [
+  { name: 'Windsurf', app: '/Applications/Windsurf.app', dataDir: path.join(HOME, '.codeium', 'windsurf'), ide: 'windsurf' },
+  { name: 'Windsurf Next', app: '/Applications/Windsurf Next.app', dataDir: path.join(HOME, '.codeium', 'windsurf-next'), ide: 'windsurf-next' },
+  { name: 'Antigravity', app: '/Applications/Antigravity.app', dataDir: path.join(HOME, '.codeium', 'antigravity'), ide: 'antigravity' },
+];
+
+(() => {
+  // Check which language servers are running
+  let runningIdes = [];
+  try {
+    const ps = execSync('ps aux', { encoding: 'utf-8', maxBuffer: 1024 * 1024 });
+    for (const line of ps.split('\n')) {
+      if (!line.includes('language_server_macos') || !line.includes('--csrf_token')) continue;
+      const ideMatch = line.match(/--ide_name\s+(\S+)/);
+      const appDirMatch = line.match(/--app_data_dir\s+(\S+)/);
+      if (ideMatch) runningIdes.push(ideMatch[1]);
+      if (appDirMatch) runningIdes.push(appDirMatch[1]);
+    }
+  } catch {}
+
+  const installedNotRunning = WINDSURF_VARIANTS.filter(v => {
+    const installed = fs.existsSync(v.app) || fs.existsSync(v.dataDir);
+    const running = runningIdes.some(r => r === v.ide || r.includes(v.ide));
+    return installed && !running;
+  });
+
+  if (installedNotRunning.length > 0) {
+    const names = installedNotRunning.map(v => chalk.bold(v.name)).join(', ');
+    console.log(chalk.yellow(`  ⚠ ${names} installed but not running`));
+    console.log(chalk.dim('    These editors must be open for their sessions to be detected.'));
+    console.log('');
+  }
+})();
 
 // Initialize cache DB
 console.log(chalk.dim('  Initializing cache database...'));

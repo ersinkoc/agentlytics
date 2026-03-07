@@ -562,6 +562,80 @@ function resetAndRescan(onProgress) {
   return scanAll(onProgress);
 }
 
+/**
+ * Async version of scanAll that yields the event loop between iterations.
+ * Required for SSE streaming so progress events actually flush to the client.
+ */
+async function scanAllAsync(onProgress) {
+  const chats = getAllChats();
+  const total = chats.length;
+  let scanned = 0;
+  let analyzed = 0;
+  let skipped = 0;
+
+  const existing = {};
+  for (const row of db.prepare('SELECT id, last_updated_at FROM chats').all()) {
+    existing[row.id] = row.last_updated_at;
+  }
+
+  const ins = insertChat();
+  const batchInsert = db.transaction((chatBatch) => {
+    for (const chat of chatBatch) {
+      ins.run(
+        chat.composerId, chat.source, chat.name || null, chat.mode || null,
+        chat.folder || null, chat.createdAt || null, chat.lastUpdatedAt || null,
+        chat.encrypted ? 1 : 0, chat.bubbleCount || 0,
+        JSON.stringify({ _type: chat._type, _dbPath: chat._dbPath, _filePath: chat._filePath, _port: chat._port, _csrf: chat._csrf, _https: chat._https, _rootBlobId: chat._rootBlobId, _dataType: chat._dataType })
+      );
+    }
+  });
+  batchInsert(chats);
+
+  if (onProgress) onProgress({ scanned: 0, analyzed: 0, skipped: 0, total });
+
+  for (const chat of chats) {
+    scanned++;
+    const cachedTs = existing[chat.composerId];
+    const chatTs = chat.lastUpdatedAt || chat.createdAt || 0;
+
+    if (cachedTs && cachedTs >= chatTs) {
+      const hasStat = db.prepare('SELECT 1 FROM chat_stats WHERE chat_id = ?').get(chat.composerId);
+      if (hasStat) {
+        skipped++;
+        if (onProgress) onProgress({ scanned, analyzed, skipped, total });
+        // Yield event loop so SSE flushes
+        await new Promise(r => setImmediate(r));
+        continue;
+      }
+    }
+
+    if (!chat.encrypted && (chat.name || chat.bubbleCount > 0)) {
+      try {
+        analyzeAndStore(chat);
+        analyzed++;
+      } catch { skipped++; }
+    } else {
+      skipped++;
+    }
+
+    if (onProgress) onProgress({ scanned, analyzed, skipped, total });
+    // Yield event loop so SSE flushes
+    await new Promise(r => setImmediate(r));
+  }
+
+  db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_scan', Date.now().toString());
+  db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('total_chats', total.toString());
+
+  return { total, analyzed, skipped };
+}
+
+async function resetAndRescanAsync(onProgress) {
+  if (db) db.close();
+  if (fs.existsSync(CACHE_DB)) fs.unlinkSync(CACHE_DB);
+  initDb();
+  return scanAllAsync(onProgress);
+}
+
 function getDb() { return db; }
 
 module.exports = {
@@ -576,5 +650,6 @@ module.exports = {
   getCachedProjects,
   getCachedToolCalls,
   resetAndRescan,
+  resetAndRescanAsync,
   getDb,
 };
