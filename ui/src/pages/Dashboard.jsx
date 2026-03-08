@@ -9,6 +9,7 @@ import DateRangePicker from '../components/DateRangePicker'
 import { editorColor, editorLabel, formatNumber, formatCost, dateRangeToApiParams } from '../lib/constants'
 import EditorIcon from '../components/EditorIcon'
 import { fetchDailyActivity, fetchOverview as fetchOverviewApi, fetchDashboardStats, fetchShareImage, fetchChats, fetchCosts } from '../lib/api'
+import ChatSidebar from '../components/ChatSidebar'
 import { useTheme } from '../lib/theme'
 import SectionTitle from '../components/SectionTitle'
 
@@ -33,6 +34,7 @@ export default function Dashboard({ overview }) {
   const [costs, setCosts] = useState(null)
   const [sharing, setSharing] = useState(false)
   const [largeContextChats, setLargeContextChats] = useState(null)
+  const [selectedChatId, setSelectedChatId] = useState(null)
   const txtColor = dark ? '#888' : '#555'
   const txtDim = dark ? '#555' : '#999'
   const gridColor = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)'
@@ -542,7 +544,7 @@ export default function Dashboard({ overview }) {
                   key={c.id}
                   className="flex items-center gap-1.5 px-1.5 py-1 rounded-sm cursor-pointer transition hover:opacity-80"
                   style={{ background: c.bubbleCount >= 500 ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)' }}
-                  onClick={() => navigate(`/sessions/${c.id}`)}
+                  onClick={() => setSelectedChatId(c.id)}
                 >
                   <EditorIcon source={c.source} size={10} />
                   <span className="text-[10px] truncate flex-1" style={{ color: 'var(--c-text)' }}>{c.name || 'Untitled'}</span>
@@ -558,6 +560,7 @@ export default function Dashboard({ overview }) {
           </div>
         )}
       </div>
+      <ChatSidebar chatId={selectedChatId} onClose={() => setSelectedChatId(null)} />
     </div>
   )
 }
